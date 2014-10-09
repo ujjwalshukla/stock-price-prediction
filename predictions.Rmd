@@ -1,0 +1,157 @@
+---
+title: "financial Predictions"
+author: "Ujjwal Shukla"
+date: "Thursday, October 09, 2014"
+output: html_document
+---
+
+```{r}
+## for Arima model with actual data model
+library("forecast")
+filenames <- list.files("data", pattern="*.csv", full.names=TRUE)
+stocks <- lapply(filenames, read.csv)
+res <- lapply(stocks, summary)
+for(stockcnt in 1:length(filenames)){
+    stock = stocks[[stockcnt]]
+    a<-strptime(stock$Date, format = "%Y-%m-%d")
+    minYr <- min(format(a, "%Y"))
+    ymin = min(stock$Close)
+    ymax = max(stock$Close)
+    tsStock = ts(rev(stock$Close),start=c(as.integer(minYr), 1),frequency=12)
+    train <- window(tsStock, end=2012.75)
+    test <- window(tsStock, start=2013)
+    
+    ## using actual data
+    fitr <-arima(train, order=c(15,3,3))
+    fitr2 <-  arima(train, order=c(1,0,0), list(order=c(2,1,0), period=12))
+    NETfitr <- nnetar(train)
+    HWStockr = HoltWinters(train)
+    HWStockr_ng = HoltWinters(train,gamma=FALSE)
+    fitlr <- tslm(train ~ trend + season, lambda=0)
+    stlStockr = stl(train,s.window="periodic")
+    
+    ## using stl 
+    stlStock = stl(train,s.window="periodic")
+    tsStocktrend2 = stlStock$time.series[,2]
+        
+    #fit2 <- arima(tsStocktrend2, order=c(15,3,3))
+    #fit22 <- arima(tsStocktrend2, order=c(1,0,0), list(order=c(2,1,0), period=12))
+    NETfit2 <- nnetar(tsStocktrend2)
+    HWStock2 = HoltWinters(tsStocktrend2)
+    HWStock2_ng = HoltWinters(tsStocktrend2,gamma=FALSE)
+    fitl2 <- tslm(tsStocktrend2 ~ trend + season, lambda=0)
+
+    
+    predictions = vector(mode="list")
+    predictions[[1]] =  window(forecast(fitr,h=39)$mean, start=2013)
+    predictions[[2]] =  window(forecast(fitr2,h=39)$mean, start=2013)
+    predictions[[3]] =  window(forecast(NETfitr,h=39)$mean, start=2013)
+    predictions[[4]] =  window(predict(HWStockr,n.ahead=39), start=2013)
+    predictions[[5]] =  window(predict(HWStockr_ng,n.ahead=39), start=2013)
+    predictions[[6]] =  window(forecast(fitlr, h=39)$mean , start=2013)
+    predictions[[7]] =  window(forecast(stlStockr, h=39)$mean, start=2013)
+    #predictions[[8]] =  window(forecast(fit2,h=39)$mean, start=2013)
+    #predictions[[9]] =  window(forecast(fit22,h=39)$mean, start=2013)
+    predictions[[8]] = window(forecast(NETfit2,h=39)$mean, start=2013)
+    predictions[[9]] = window(predict(HWStock2,n.ahead=39), start=2013)
+    predictions[[10]] = window(predict(HWStock2_ng,n.ahead=39), start=2013)
+    predictions[[11]] = window(forecast(fitl2, h=39)$mean , start=2013)
+    
+    plot(train, xlim=c(as.integer(minYr), 2016), ylim=c(ymin,ymax),type= "n")
+    lines(train, col = "black")
+    lines(test, col = "blue")
+    lines(predictions[[1]], col=1)
+    lines(predictions[[2]], col=2)
+    lines(predictions[[3]], col=3)
+    lines(predictions[[4]], col=4)
+    lines(predictions[[5]], col=5)
+    lines(predictions[[6]], col=6)
+    lines(predictions[[7]], col=7)
+    #lines(predictions[[8]], col=8)
+    #lines(predictions[[9]], col=9)
+    lines(predictions[[8]], col=10)
+    lines(predictions[[9]], col=11)
+    lines(predictions[[10]], col=12)
+    lines(predictions[[11]], col=13)
+    
+    mae = data.frame()
+    for(pred in 1:length(predictions)){
+      for(i in 1:length(test))
+      {
+        ##print(predictions[[pred]][i])
+        mae[i, pred] <-abs(predictions[[pred]][i]^2-test[i]^2)
+      }  
+    }
+    print(mae)
+    minimumSqrError = apply(mae, 2, sum)
+    print(minimumSqrError)
+    best = which.min(minimumSqrError)
+    print(best)
+    
+    plot(train, xlim=c(as.integer(minYr), 2016), ylim=c(ymin,ymax), type= "n")
+    lines(train, col = "black")
+    lines(test, col = "blue")
+    lines(predictions[[best]], col = "red")
+    
+    stlStock = stl(tsStock,s.window="periodic")
+    tsStocktrend2 = stlStock$time.series[,2]
+    
+    if(best == 1){
+        print("fitr")
+        fitr =arima(tsStock, order=c(15,3,3))
+        prediction =  window(forecast(fitr,h=39)$mean, start=2014.5)
+    } else if(best == 2){
+        print("fitr2")
+        fitr2 =  arima(tsStock, order=c(1,0,0), list(order=c(2,1,0), period=12))
+        prediction =  window(forecast(fitr2,h=39)$mean, start=2014.5)
+    } else if(best == 3){
+        print("NETfitr")
+        NETfitr = nnetar(tsStock)
+        prediction =  window(forecast(NETfitr,h=39)$mean, start=2014.5)
+    } else if(best == 4){
+        print("HWStockr")
+        HWStockr = HoltWinters(tsStock)
+        prediction =  window(predict(HWStockr,n.ahead=39), start=2014.5)
+    } else if(best == 5){
+        print("HWStockr_ng")  
+        HWStockr_ng = HoltWinters(tsStock,gamma=FALSE)
+        prediction =  window(predict(HWStockr_ng,n.ahead=39), start=2014.5)
+    } else if(best == 6){
+        print("fitr")
+        fitr =tslm(tsStock ~ trend + season, lambda=0)
+        prediction =  window(forecast(fitlr, h=39)$mean , start=2014.5)
+    } else if(best == 7){
+        print("stlStockr")
+        stlStockr = stl(tsStock,s.window="periodic")
+        prediction =  window(forecast(stlStockr, h=39)$mean, start=2014.5)
+    #} else if(best == 8){
+    #    print("fit2")
+    #    fit2 <- arima(tsStocktrend2, order=c(15,3,3))
+    #    prediction = window(forecast(fit2,h=39)$mean, start=2014.5)
+    #} else if(best == 9){
+    #    print("fit22")
+    #    fit22 <- arima(tsStocktrend2, order=c(1,0,0), list(order=c(2,1,0), period=12))
+    #    prediction = window(forecast(fit22,h=39)$mean, start=2014.5)
+    } else if(best == 8){
+        print("NETfit2")
+        NETfit2 <- nnetar(tsStocktrend2)
+        prediction = window(forecast(NETfit2,h=39)$mean, start=2014.5)
+    } else if(best == 9){
+        print("HWStock2")
+        HWStock2 = HoltWinters(tsStocktrend2)
+        prediction =  window(predict(HWStock2,n.ahead=39), start=2014.5)
+    } else if(best == 10){
+        print("HWStock2_ng")
+        HWStock2_ng = HoltWinters(tsStocktrend2,gamma=FALSE)
+        prdiction = window(predict(HWStock2_ng,n.ahead=39), start=2014.5)
+    } else if(best == 11){
+        print("fitl2")
+        fitl2 <- tslm(tsStocktrend2 ~ trend + season, lambda=0)
+        prediction =  window(forecast(fitl2, h=39)$mean , start=2014.5)
+    } 
+    plot(tsStock, xlim=c(as.integer(minYr), 2017), ylim=c(ymin-10,ymax+10), type= "n", main = filenames[stockcnt])
+    lines(tsStock, col = "black")
+    lines(prediction, col = "red")
+}
+```
+
